@@ -17,7 +17,7 @@ import re
 import socket
 from dataclasses import asdict
 from typing import List, Literal, Optional, Union
-
+from pathlib import Path
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
@@ -170,6 +170,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._container = self.unit.get_container(self._name)
+        self._root_data_dir = Path(self.meta.containers["mimir-worker"].mounts["data"].location)
 
         self.topology = JujuTopology.from_charm(self)
 
@@ -318,13 +319,31 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         return False
 
     def _build_mimir_config(self) -> dict:
-        # TODO: Implement this!
-        return {}
+        """Build mimir config.
 
-    def _running_mimir_config(self) -> dict:
+        - Place all data dirs under a common root data dir, so files are persisted across upgrades.
+          Following the default names from official docs:
+          https://grafana.com/docs/mimir/latest/references/configuration-parameters/
+        """
+        return {
+            "alertmanager": {
+                "data_dir": str(self._root_data_dir / "data-alertmanager"),
+            },
+            "compactor": {
+                "data_dir": str(self._root_data_dir / "data-compactor"),
+            },
+            "blocks_storage": {
+                "bucket_store": {
+                    "sync_dir": str(self._root_data_dir / "tsdb-sync"),
+                },
+            },
+        }
+
+    def _running_mimir_config(self) -> Optional[dict]:
+        """Return the Mimir config as dict, or None if retrieval failed."""
         if not self._container.can_connect():
             logger.debug("Could not connect to Mimir container")
-            return {}
+            return None
 
         try:
             raw_current = self._container.pull(MIMIR_CONFIG).read()
@@ -335,7 +354,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
                 "a failure in retrieving the file: %s",
                 e,
             )
-            return {}
+            return None
 
     def restart(self):
         """Restart the pebble service or start if not already running."""
