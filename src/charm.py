@@ -16,8 +16,9 @@ import logging
 import re
 import socket
 from dataclasses import asdict
-from typing import List, Literal, Optional, Union
 from pathlib import Path
+from typing import List, Literal, Optional, Union
+
 import yaml
 from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
