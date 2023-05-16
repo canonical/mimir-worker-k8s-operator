@@ -164,7 +164,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     """A Juju Charmed Operator for Mimir Worker."""
 
     _name = "mimir-worker"
-    _http_listen_port = 9009
     _instance_addr = "127.0.0.1"
 
     def __init__(self, *args):
@@ -174,7 +173,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.topology = JujuTopology.from_charm(self)
 
         self.service_path = KubernetesServicePatch(
-            self, [ServicePort(self._http_listen_port, name=self.app.name)]
+            self, [ServicePort(8080, name=self.app.name)]  # API endpoint
         )
 
         self.framework.observe(
