@@ -175,7 +175,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.topology = JujuTopology.from_charm(self)
 
         self.service_path = KubernetesServicePatch(
-            self, [ServicePort(8080, name=self.app.name)]  # API endpoint for "all"
+            self,
+            [ServicePort(8080, name=self.app.name)]  # API endpoint for "all"
             # TODO figure out metrics endpoints for all roles. For example, when mimir is started
             #  with the alertmanager role, no ports are bound at all.
         )
@@ -276,7 +277,9 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """Return a set of the roles Mimir worker should take on."""
         # Filter out of all possible relations those that actually are active
         active_rel_names = [k for k in self._mimir_relation_names if self.model.relations.get(k)]
-        active_roles = [rel.lstrip("mimir-") for rel in active_rel_names]
+        active_roles = [
+            rel[len("mimir-") :] for rel in active_rel_names if rel.startswith("mimir-")
+        ]
         # TODO make sure that the list of active roles is a subset of valid roles
         #  or drop the 'mimir-' prefix from relation names
         return active_roles or DEFAULT_ROLES
