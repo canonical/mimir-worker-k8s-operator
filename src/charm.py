@@ -24,10 +24,9 @@ from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
 from lightkube.models.core_v1 import ServicePort
-from ops import Relation
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, WaitingStatus
+from ops.model import ActiveStatus, Relation, WaitingStatus
 from ops.pebble import PathError, ProtocolError
 from pydantic import BaseModel
 from pydantic.dataclasses import dataclass as pydantic_dataclass
@@ -208,7 +207,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
     def _update_all_endpoint_urls(self, _):
         for rel_name in self._mimir_relation_names:
-            for relation in self.model.relations.get(rel_name):
+            for relation in self.model.relations.get(rel_name, []):
                 self._update_endpoint_url(relation)
 
     def _on_update_status(self, _):
