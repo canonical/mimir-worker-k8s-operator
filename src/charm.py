@@ -176,10 +176,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.topology = JujuTopology.from_charm(self)
 
         self.service_path = KubernetesServicePatch(
-            self,
-            [ServicePort(8080, name=self.app.name)]  # API endpoint for "all"
-            # TODO figure out metrics endpoints for all roles. For example, when mimir is started
-            #  with the alertmanager role, no ports are bound at all.
+            self, [ServicePort(8080, name=self.app.name)]  # Same API endpoint for all components
         )
 
         self.framework.observe(
