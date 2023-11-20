@@ -1,4 +1,27 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-options: {}
+options:
+  roles:
+    description: |
+      Comma-separated list of Mimir roles that this worker should fulfill.
+      Possible roles are:
+      - "query_scheduler"
+      - "query_frontend"
+      - "querier"
+      - "store_gateway"
+      - "ingester"
+      - "distributor"
+      - "ruler"
+      - "alertmanager"
+      - "compactor"
+      Note that for a mimir deployment to be valid, each one of these roles needs to be 
+      assigned to at least one worker node.
+      
+      Additionally, you can assign these optional roles:
+      - "overrides_exporter"
+      - "flusher"
+      
+      These roles are optional in that they're not required for a mimir 
+      deployment to function.
+    type: string

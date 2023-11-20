@@ -1,46 +1,72 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
+import json
 
 import pytest
-from ops.model import ActiveStatus, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from scenario import Container, Relation, State
 
 from tests.scenario.conftest import MIMIR_VERSION_EXEC_OUTPUT
 
 
 @pytest.mark.parametrize("evt", ["update-status", "config-changed"])
-def test_update_status_cannot_connect(ctx, evt):
-    mimir_container = Container("mimir-worker", can_connect=False)
+def test_status_cannot_connect_no_relation(ctx, evt):
+    state_out = ctx.run(evt, state=State(containers=[Container("mimir", can_connect=False)]))
+    assert state_out.unit_status == BlockedStatus(
+        "Missing mimir-cluster relation to a mimir-coordinator charm"
+    )
 
-    state_out = ctx.run(evt, state=State(containers=[mimir_container]))
-    assert state_out.status.unit == WaitingStatus("Waiting for Pebble ready")
+
+@pytest.mark.parametrize("evt", ["update-status", "config-changed"])
+def test_status_cannot_connect(ctx, evt):
+    state_out = ctx.run(
+        evt,
+        state=State(
+            config={"roles": "ruler"},
+            containers=[Container("mimir", can_connect=False)],
+            relations=[Relation("mimir-cluster")],
+        ),
+    )
+    assert state_out.unit_status == WaitingStatus("Waiting for `mimir` container")
+
+
+@pytest.mark.parametrize("evt", ["update-status", "config-changed"])
+def test_status_no_config(ctx, evt):
+    state_out = ctx.run(
+        evt,
+        state=State(
+            containers=[Container("mimir", can_connect=True)],
+            relations=[Relation("mimir-cluster")],
+        ),
+    )
+    assert state_out.unit_status == BlockedStatus("No roles assigned: please configure some roles")
 
 
 @pytest.mark.parametrize(
-    "relations",
+    "roles",
     (
         ["alertmanager", "compactor"],
         ["alertmanager", "distributor"],
         ["alertmanager"],
-        ["alertmanager", "query-frontend"],
-        ["alertmanager", "ruler", "store-gateway"],
-        ["alertmanager", "overrides-exporter", "ruler", "store-gateway"],  # order matters
+        ["alertmanager", "query_frontend"],
+        ["alertmanager", "ruler", "store_gateway"],
+        ["alertmanager", "overrides_exporter", "ruler", "store_gateway"],  # order matters
     ),
 )
-def test_pebble_ready_plan(ctx, relations):
+def test_pebble_ready_plan(ctx, roles):
     expected_plan = {
         "services": {
-            "mimir-worker": {
+            "mimir": {
                 "override": "replace",
                 "summary": "mimir worker daemon",
-                "command": f"/bin/mimir --config.file=/etc/mimir/mimir-config.yaml -target {','.join(relations)}",
+                "command": f"/bin/mimir --config.file=/etc/mimir/mimir-config.yaml -target {','.join(roles)}",
                 "startup": "enabled",
             }
         },
     }
 
     mimir_container = Container(
-        "mimir-worker",
+        "mimir",
         can_connect=True,
         exec_mock={("/bin/mimir", "-version"): MIMIR_VERSION_EXEC_OUTPUT},
     )
@@ -48,16 +74,19 @@ def test_pebble_ready_plan(ctx, relations):
     state_out = ctx.run(
         mimir_container.pebble_ready_event,
         state=State(
+            config={"roles": ",".join(roles)},
             containers=[mimir_container],
             relations=[
-                Relation(endpoint, interface="mimir_worker", remote_app_name=f"{endpoint} app")
-                for endpoint in relations
+                Relation(
+                    "mimir-cluster",
+                    remote_app_data={"mimir_config": json.dumps({"alive": "beef"})},
+                )
             ],
         ),
     )
 
     mimir_container_out = state_out.get_container(mimir_container)
-    assert mimir_container_out.services.get("mimir-worker").is_running() is True
+    assert mimir_container_out.services.get("mimir").is_running() is True
     assert mimir_container_out.plan.to_dict() == expected_plan
 
-    assert state_out.status.unit == ActiveStatus("")
+    assert state_out.unit_status == ActiveStatus("")
