@@ -19,13 +19,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from lightkube.models.core_v1 import ServicePort
-from ops import pebble
-from ops.charm import CharmBase, CollectStatusEvent
-from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
-from ops.pebble import PathError, ProtocolError
-
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
     ConfigReceivedEvent,
     MimirClusterRequirer,
@@ -35,6 +28,12 @@ from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
+from lightkube.models.core_v1 import ServicePort
+from ops import pebble
+from ops.charm import CharmBase, CollectStatusEvent
+from ops.main import main
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.pebble import PathError, ProtocolError
 
 MIMIR_CONFIG = "/etc/mimir/mimir-config.yaml"
 MIMIR_DIR = "/mimir"
@@ -80,7 +79,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """Share via mimir-cluster all information we need to publish."""
         self.mimir_cluster.publish_unit_address(socket.getfqdn())
         if self.unit.is_leader() and self._mimir_roles:
-            logger.info(f'publishing roles: {self._mimir_roles}')
+            logger.info(f"publishing roles: {self._mimir_roles}")
             self.mimir_cluster.publish_app_roles(self._mimir_roles)
 
     def _on_mimir_config_received(self, _e: ConfigReceivedEvent):
@@ -128,10 +127,10 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         new_layer = self._pebble_layer
 
         if (
-                "services" not in current_layer.to_dict()
-                or current_layer.services != new_layer["services"]
+            "services" not in current_layer.to_dict()
+            or current_layer.services != new_layer["services"]
         ):
-            self._container.add_layer(self._name, new_layer, combine=True)
+            self._container.add_layer(self._name, new_layer, combine=True)  # pyright: ignore
             return True
 
         return False
@@ -139,7 +138,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     @property
     def _pebble_layer(self):
         """Return a dictionary representing a Pebble layer."""
-        targets = ','.join(self._mimir_roles)
+        targets = ",".join(self._mimir_roles)
 
         return {
             "summary": "mimir worker layer",
@@ -166,7 +165,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         for raw_role in raw_roles:
             try:
                 role = MimirRole(raw_role)
-            except Exception as e:
+            except Exception:
                 # todo: should we try to recover from this instead?
                 logger.error(f"Bad config: invalid role: {raw_role}")
                 continue
@@ -217,8 +216,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """
         config = config.copy()
         for key, folder in (
-                ("alertmanager", "data-alertmanager"),
-                ("compactor", "data-compactor"),
+            ("alertmanager", "data-alertmanager"),
+            ("compactor", "data-compactor"),
         ):
             if key not in config:
                 config[key] = {}
@@ -230,9 +229,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         #   data_dir: /data/tsdb-sync
         if config.get("blocks_storage"):
             config["blocks_storage"] = {
-                "bucket_store": {
-                    "sync_dir": str(self._root_data_dir / 'tsdb-sync')
-                }
+                "bucket_store": {"sync_dir": str(self._root_data_dir / "tsdb-sync")}
             }
 
         return config
