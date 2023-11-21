@@ -156,22 +156,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     @property
     def _mimir_roles(self) -> List[MimirRole]:
         """Return a set of the roles this Mimir worker should take on."""
-        raw = self.config.get("roles", None)
-        if raw is None:
-            return []
-
-        raw_roles = set(raw.split(","))
-        roles = set()
-        for raw_role in raw_roles:
-            try:
-                role = MimirRole(raw_role)
-            except Exception:
-                # todo: should we try to recover from this instead?
-                logger.error(f"Bad config: invalid role: {raw_role}")
-                continue
-
-            roles.add(role)
-        return list(roles)
+        roles: List[MimirRole] = [role for role in MimirRole if self.config[role] is True]
+        return roles
 
     @property
     def _mimir_version(self) -> Optional[str]:
