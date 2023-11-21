@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+from lightkube.models.core_v1 import ServicePort
+from ops.charm import CharmBase, CollectStatusEvent
+from ops.main import main
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
+from ops.pebble import PathError, ProtocolError
+
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
     ConfigReceivedEvent,
     MimirClusterRequirer,
@@ -28,11 +34,6 @@ from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
-from lightkube.models.core_v1 import ServicePort
-from ops.charm import CharmBase, CollectStatusEvent
-from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
-from ops.pebble import PathError, ProtocolError
 
 MIMIR_CONFIG = "/etc/mimir/mimir-config.yaml"
 MIMIR_DIR = "/mimir"
@@ -78,6 +79,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """Share via mimir-cluster all information we need to publish."""
         self.mimir_cluster.publish_unit_address(socket.getfqdn())
         if self.unit.is_leader() and self._mimir_roles:
+            logger.info(f'publishing roles: {self._mimir_roles}')
             self.mimir_cluster.publish_app_roles(self._mimir_roles)
 
     def _on_mimir_config_received(self, _e: ConfigReceivedEvent):
@@ -89,8 +91,11 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     def _on_config_changed(self, _):
         # if the user has changed the roles, we might need to let the coordinator know
         self._update_mimir_cluster()
-        # determine if a workload restart is necessary
-        self._update_config()
+
+        # if we have a config, we can start mimir
+        if self.mimir_cluster.get_mimir_config():
+            # determine if a workload restart is necessary
+            self._update_config()
 
     def _update_config(self):
         """Update the mimir config and restart the workload if necessary."""
@@ -122,8 +127,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         new_layer = self._pebble_layer
 
         if (
-            "services" not in current_layer.to_dict()
-            or current_layer.services != new_layer["services"]
+                "services" not in current_layer.to_dict()
+                or current_layer.services != new_layer["services"]
         ):
             self._container.add_layer(self._name, new_layer, combine=True)
             return True
@@ -153,13 +158,30 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         if raw is None:
             return []
 
-        try:
-            roles = [MimirRole(role) for role in raw.split(",")]
-        except Exception as e:
-            # todo: should we try to recover from this instead?
-            raise RuntimeError(f"Bad config: invalid roles: {raw}") from e
+        meta_roles = {
+            "READ": (MimirRole.query_frontend, MimirRole.querier),
+            "WRITE": (MimirRole.distributor, MimirRole.ingester),
+            "BACKEND": (MimirRole.store_gateway, MimirRole.compactor,
+                        MimirRole.ruler, MimirRole.alertmanager,
+                        MimirRole.query_scheduler, MimirRole.overrides_exporter),
+            "ALL": list(MimirRole)
+        }
 
-        return roles
+        raw_roles = set(raw.split(","))
+        roles = set()
+        for raw_role in raw_roles:
+            if raw_role in meta_roles:
+                roles.update(meta_roles[raw_role])
+            else:
+                try:
+                    role = MimirRole(raw_role)
+                except Exception as e:
+                    # todo: should we try to recover from this instead?
+                    logger.error(f"Bad config: invalid role: {raw_role}")
+                    continue
+
+                roles.add(role)
+        return list(roles)
 
     @property
     def _mimir_version(self) -> Optional[str]:
@@ -182,6 +204,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """
         mimir_config = self.mimir_cluster.get_mimir_config()
         if not mimir_config:
+            logger.warning("cannot update mimir config: coordinator hasn't published one yet.")
             return False
 
         config = self._set_data_dirs(mimir_config)
@@ -203,9 +226,9 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """
         config = config.copy()
         for key, folder in (
-            ("alertmanager", "data-alertmanager"),
-            ("compactor", "data-compactor"),
-            ("blocks_storage", "tsdb-sync"),
+                ("alertmanager", "data-alertmanager"),
+                ("compactor", "data-compactor"),
+                ("blocks_storage", "tsdb-sync"),
         ):
             if key not in config:
                 config[key] = {}
@@ -232,6 +255,9 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
     def restart(self):
         """Restart the pebble service or start if not already running."""
+        if not self._container.exists(MIMIR_CONFIG):
+            logger.error("cannot restart mimir: config file doesn't exist (yet).")
+
         if self._container.get_service(self._name).is_running():
             self._container.restart(self._name)
         else:

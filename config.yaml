@@ -24,4 +24,10 @@ options:
       
       These roles are optional in that they're not required for a mimir 
       deployment to function.
+      
+      Supported meta-roles:
+      - "ALL" (equivalent to all required roles)
+      - "WRITE" (equivalent to "query_frontend,querier,store_gateway,ingester")
+      - "READ" (equivalent to "distributor,ingester")
+
     type: string
