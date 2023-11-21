@@ -138,11 +138,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     @property
     def _pebble_layer(self):
         """Return a dictionary representing a Pebble layer."""
-<<<<<<< Updated upstream
-        targets = ",".join(self._mimir_roles)
-=======
         targets = ','.join(sorted(self._mimir_roles))
->>>>>>> Stashed changes
 
         return {
             "summary": "mimir worker layer",
