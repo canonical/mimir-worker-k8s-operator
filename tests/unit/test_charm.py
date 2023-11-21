@@ -4,11 +4,11 @@
 
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 import ops
 from charm import MimirWorkerK8SOperatorCharm
 from ops.testing import Harness
-from uuid import uuid4
 
 ops.testing.SIMULATE_CAN_CONNECT = True
 
