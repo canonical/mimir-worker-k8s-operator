@@ -27,4 +27,5 @@ class TestWithInitialHooks(unittest.TestCase):
 
     @patch("charm.KubernetesServicePatch", lambda *_, **__: None)
     def test_initial_hooks(self):
+        self.harness.set_model_info("foo", str(uuid4()))
         self.harness.begin_with_initial_hooks()

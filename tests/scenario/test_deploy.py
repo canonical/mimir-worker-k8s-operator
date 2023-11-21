@@ -1,10 +1,11 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pydantic
 import pytest
+from charms.mimir_coordinator_k8s.v0.mimir_cluster import MimirRole
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from scenario import Container, Relation, State
 
@@ -62,7 +63,7 @@ def test_pebble_ready_plan(ctx, roles):
             "mimir": {
                 "override": "replace",
                 "summary": "mimir worker daemon",
-                "command": f"/bin/mimir --config.file=/etc/mimir/mimir-config.yaml -target {','.join(roles)}",
+                "command": f"/bin/mimir --config.file=/etc/mimir/mimir-config.yaml -target {','.join(sorted(roles))}",
                 "startup": "enabled",
             }
         },
@@ -95,11 +96,13 @@ def test_pebble_ready_plan(ctx, roles):
     assert state_out.unit_status == ActiveStatus("")
 
 
-@pytest.mark.parametrize("roles_config, expected", (
+@pytest.mark.parametrize(
+    "roles_config, expected",
+    (
         ("notarole", ()),
         ("notarole,stillnotarole", ()),
         ("foo, and bar;' AASDIEWORQKR<><>!!", ()),
-        ("querier", (MimirRole.querier, )),
+        ("querier", (MimirRole.querier,)),
         ("querier,ingester", (MimirRole.querier, MimirRole.ingester)),
         ("read,ingester", (MimirRole.query_frontend, MimirRole.querier, MimirRole.ingester)),
         ("read", (MimirRole.query_frontend, MimirRole.querier)),
@@ -124,5 +127,3 @@ def test_roles(ctx, roles_config, expected):
         assert set(data.roles) == set(expected)
     else:
         assert not out.get_relations('mimir-cluster')[0].local_app_data
-
-
