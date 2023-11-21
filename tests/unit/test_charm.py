@@ -4,6 +4,7 @@
 
 import unittest
 from unittest.mock import patch
+from uuid import uuid4
 
 import ops
 from charm import MimirWorkerK8SOperatorCharm
@@ -19,8 +20,8 @@ class TestWithInitialHooks(unittest.TestCase):
         )
         self.mock_version = patcher.start()
         self.addCleanup(patcher.stop)
-
         self.harness = Harness(MimirWorkerK8SOperatorCharm)
+        self.harness.set_model_info('foo', str(uuid4()))
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
 
