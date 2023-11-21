@@ -120,7 +120,7 @@ def test_roles(ctx, roles_config, expected):
         "config-changed",
         state=State(
             leader=True,
-            config={x: True for x in roles_config.split(',')},
+            config={x: True for x in roles_config.split(",")},
             containers=[Container("mimir", can_connect=True)],
             relations=[Relation("mimir-cluster")],
         ),
