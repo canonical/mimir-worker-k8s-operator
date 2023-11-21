@@ -26,8 +26,10 @@ options:
       deployment to function.
       
       Supported meta-roles:
-      - "ALL" (equivalent to all required roles)
-      - "WRITE" (equivalent to "query_frontend,querier,store_gateway,ingester")
-      - "READ" (equivalent to "distributor,ingester")
+      - "all" (equivalent to all required roles)
+      # TODO
+      - "write" (equivalent to "")
+      - "read" (equivalent to "distributor,ingester")
+      - "backend" (equivalent to "<the rest>")
 
     type: string

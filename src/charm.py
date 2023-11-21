@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from lightkube.models.core_v1 import ServicePort
+from ops import pebble
 from ops.charm import CharmBase, CollectStatusEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -138,6 +139,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     @property
     def _pebble_layer(self):
         """Return a dictionary representing a Pebble layer."""
+        targets = ','.join(self._mimir_roles)
+
         return {
             "summary": "mimir worker layer",
             "description": "pebble config layer for mimir worker",
@@ -145,7 +148,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
                 "mimir": {
                     "override": "replace",
                     "summary": "mimir worker daemon",
-                    "command": f"/bin/mimir --config.file={MIMIR_CONFIG} -target {','.join(self._mimir_roles)}",
+                    "command": f"/bin/mimir --config.file={MIMIR_CONFIG} -target {targets}",
                     "startup": "enabled",
                 }
             },
@@ -158,29 +161,17 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         if raw is None:
             return []
 
-        meta_roles = {
-            "READ": (MimirRole.query_frontend, MimirRole.querier),
-            "WRITE": (MimirRole.distributor, MimirRole.ingester),
-            "BACKEND": (MimirRole.store_gateway, MimirRole.compactor,
-                        MimirRole.ruler, MimirRole.alertmanager,
-                        MimirRole.query_scheduler, MimirRole.overrides_exporter),
-            "ALL": list(MimirRole)
-        }
-
         raw_roles = set(raw.split(","))
         roles = set()
         for raw_role in raw_roles:
-            if raw_role in meta_roles:
-                roles.update(meta_roles[raw_role])
-            else:
-                try:
-                    role = MimirRole(raw_role)
-                except Exception as e:
-                    # todo: should we try to recover from this instead?
-                    logger.error(f"Bad config: invalid role: {raw_role}")
-                    continue
+            try:
+                role = MimirRole(raw_role)
+            except Exception as e:
+                # todo: should we try to recover from this instead?
+                logger.error(f"Bad config: invalid role: {raw_role}")
+                continue
 
-                roles.add(role)
+            roles.add(role)
         return list(roles)
 
     @property
@@ -228,11 +219,21 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         for key, folder in (
                 ("alertmanager", "data-alertmanager"),
                 ("compactor", "data-compactor"),
-                ("blocks_storage", "tsdb-sync"),
         ):
             if key not in config:
                 config[key] = {}
-            config[key]["data-dir"] = str(self._root_data_dir / folder)
+            config[key]["data_dir"] = str(self._root_data_dir / folder)
+
+        # blocks_storage:
+        #   bucket_store:
+        #     sync_dir: /etc/mimir/tsdb-sync
+        #   data_dir: /data/tsdb-sync
+        if config.get("blocks_storage"):
+            config["blocks_storage"] = {
+                "bucket_store": {
+                    "sync_dir": str(self._root_data_dir / 'tsdb-sync')
+                }
+            }
 
         return config
 
@@ -258,10 +259,14 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         if not self._container.exists(MIMIR_CONFIG):
             logger.error("cannot restart mimir: config file doesn't exist (yet).")
 
-        if self._container.get_service(self._name).is_running():
-            self._container.restart(self._name)
-        else:
-            self._container.start(self._name)
+        try:
+            if self._container.get_service(self._name).is_running():
+                self._container.restart(self._name)
+            else:
+                self._container.start(self._name)
+        except pebble.ChangeError as e:
+            logger.error(f"failed to (re)start mimir job: {e}", exc_info=True)
+            return
 
     def _on_collect_status(self, e: CollectStatusEvent):
         if not self._container.can_connect():
