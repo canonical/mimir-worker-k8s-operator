@@ -201,23 +201,26 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
           https://grafana.com/docs/mimir/latest/references/configuration-parameters/
         """
         config = config.copy()
-        for key, folder in (
-            ("alertmanager", "data-alertmanager"),
-            ("compactor", "data-compactor"),
-        ):
-            if key not in config:
-                config[key] = {}
-            config[key]["data_dir"] = str(self._root_data_dir / folder)
+        data_mapping = [
+            ("alertmanager", "data_dir", "data-alertmanager"),
+            ("alertmanager_storage", "filesystem", "data-alertmanager-recovery"),
+            ("compactor", "data_dir", "data-compactor"),
+            ("ruler", "rule_path", "data-ruler"),
+            ("ruler_storage", "filesystem", "ruler"),
+            ("blocks_storage", "filesystem", "blocks"),
+            ("blocks_storage", "tsdb", "tsdb"),
+            ("blocks_storage", "bucket_store", "tsdb-sync"),
+        ]
 
-        # blocks_storage:
-        #   bucket_store:
-        #     sync_dir: /etc/mimir/tsdb-sync
-        #   data_dir: /data/tsdb-sync
-        if config.get("blocks_storage"):
-            config["blocks_storage"] = {
-                "bucket_store": {"sync_dir": str(self._root_data_dir / "tsdb-sync")}
-            }
-
+        for key, subkey, folder in data_mapping:
+            config.setdefault(key, {})
+            if subkey in config[key]:
+                if "data_dir" == subkey or subkey == "rule_path":
+                    config[key][subkey] = str(self._root_data_dir / folder)
+                elif "filesystem" == subkey or subkey == "tsdb":
+                    config[key][subkey] = {"dir": str(self._root_data_dir / folder)}
+                elif "bucket_store" == subkey:
+                    config[key][subkey] = {"sync_dir": str(self._root_data_dir / folder)}
         return config
 
     def _running_mimir_config(self) -> Optional[dict]:
