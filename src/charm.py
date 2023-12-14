@@ -183,6 +183,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             logger.warning("cannot update mimir config: coordinator hasn't published one yet.")
             return False
 
+        # Data published by the coordinator won't have the actual common root data directory used by workers
+        # Update the configuration with data directory paths using the _set_data_dirs method
         config = self._set_data_dirs(mimir_config)
 
         if self._running_mimir_config() != config:
@@ -194,13 +196,16 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         return False
 
     def _set_data_dirs(self, config: Dict[str, Any]) -> dict:
-        """Set the data-dirs in the config we received from the coordinator.
+        """Set the data directories in the received config from the coordinator.
 
-        - Place all data dirs under a common root data dir, so files are persisted across upgrades.
-          Following the default names from official docs:
-          https://grafana.com/docs/mimir/latest/references/configuration-parameters/
+        - All data directories are placed under a common root data directory to persist
+        files across upgrades. The naming follows the default conventions from the
+        official Mimir docs: https://grafana.com/docs/mimir/latest/references/configuration-parameters/
         """
         config = config.copy()
+
+        # Define a list of keys, subkeys, and folders in the Mimir config
+        # that need to be under the common root data directory
         data_mapping = [
             ("alertmanager", "data_dir", "data-alertmanager"),
             ("alertmanager_storage", "filesystem", "data-alertmanager-recovery"),
@@ -212,13 +217,24 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             ("blocks_storage", "bucket_store", "tsdb-sync"),
         ]
 
+        # The Mimir coordinator doesn't know the actual location of where the data
+        # will reside in the workers. The following loop updates the path of each key
+        # in the data_mapping list to match the actual common root data directory where
+        # the data will reside.
         for key, subkey, folder in data_mapping:
+            # Ensure the key exists in the config dictionary
             config.setdefault(key, {})
+
+            # Check if the subkey exists in the corresponding key's configuration
             if subkey in config[key]:
+                # Update the subkey based on its type
+                # Both "data_dir" and "rule_path" in Mimir config don't have subkeys
                 if "data_dir" == subkey or subkey == "rule_path":
                     config[key][subkey] = str(self._root_data_dir / folder)
+                # Both "filesystem" and "tsdb" in Mimir config have a subkey "dir"
                 elif "filesystem" == subkey or subkey == "tsdb":
                     config[key][subkey] = {"dir": str(self._root_data_dir / folder)}
+                # "bucket_store" in Mimir config has a subkey "sync_dir"
                 elif "bucket_store" == subkey:
                     config[key][subkey] = {"sync_dir": str(self._root_data_dir / folder)}
         return config
