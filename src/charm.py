@@ -15,8 +15,7 @@ https://discourse.charmhub.io/t/4208
 import logging
 import re
 import socket
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import yaml
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
@@ -51,7 +50,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._container = self.unit.get_container(self._name)
-        self._root_data_dir = Path(self.meta.containers["mimir"].mounts["data"].location)
 
         self.topology = JujuTopology.from_charm(self)
         self.mimir_cluster = MimirClusterRequirer(self)
@@ -183,61 +181,13 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             logger.warning("cannot update mimir config: coordinator hasn't published one yet.")
             return False
 
-        # Data published by the coordinator won't have the actual common root data directory used by workers
-        # Update the configuration with data directory paths using the _set_data_dirs method
-        config = self._set_data_dirs(mimir_config)
-
-        if self._running_mimir_config() != config:
-            config_as_yaml = yaml.safe_dump(config)
+        if self._running_mimir_config() != mimir_config:
+            config_as_yaml = yaml.safe_dump(mimir_config)
             self._container.push(MIMIR_CONFIG, config_as_yaml, make_dirs=True)
             logger.info("Pushed new Mimir configuration")
             return True
 
         return False
-
-    def _set_data_dirs(self, config: Dict[str, Any]) -> dict:
-        """Set the data directories in the received config from the coordinator.
-
-        - All data directories are placed under a common root data directory to persist
-        files across upgrades. The naming follows the default conventions from the
-        official Mimir docs: https://grafana.com/docs/mimir/latest/references/configuration-parameters/
-        """
-        config = config.copy()
-
-        # Define a list of keys, subkeys, and folders in the Mimir config
-        # that need to be under the common root data directory
-        data_mapping = [
-            ("alertmanager", "data_dir", "data-alertmanager"),
-            ("alertmanager_storage", "filesystem", "data-alertmanager-recovery"),
-            ("compactor", "data_dir", "data-compactor"),
-            ("ruler", "rule_path", "data-ruler"),
-            ("ruler_storage", "filesystem", "ruler"),
-            ("blocks_storage", "filesystem", "blocks"),
-            ("blocks_storage", "tsdb", "tsdb"),
-            ("blocks_storage", "bucket_store", "tsdb-sync"),
-        ]
-
-        # The Mimir coordinator doesn't know the actual location of where the data
-        # will reside in the workers. The following loop updates the path of each key
-        # in the data_mapping list to match the actual common root data directory where
-        # the data will reside.
-        for key, subkey, folder in data_mapping:
-            # Ensure the key exists in the config dictionary
-            config.setdefault(key, {})
-
-            # Check if the subkey exists in the corresponding key's configuration
-            if subkey in config[key]:
-                # Update the subkey based on its type
-                # Both "data_dir" and "rule_path" in Mimir config don't have subkeys
-                if "data_dir" == subkey or subkey == "rule_path":
-                    config[key][subkey] = str(self._root_data_dir / folder)
-                # Both "filesystem" and "tsdb" in Mimir config have a subkey "dir"
-                elif "filesystem" == subkey or subkey == "tsdb":
-                    config[key][subkey] = {"dir": str(self._root_data_dir / folder)}
-                # "bucket_store" in Mimir config has a subkey "sync_dir"
-                elif "bucket_store" == subkey:
-                    config[key][subkey] = {"sync_dir": str(self._root_data_dir / folder)}
-        return config
 
     def _running_mimir_config(self) -> Optional[dict]:
         """Return the Mimir config as dict, or None if retrieval failed."""
