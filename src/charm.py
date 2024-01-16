@@ -34,6 +34,8 @@ from charms.observability_libs.v0.juju_topology import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
+from charms.tempo_k8s.v1.charm_tracing import trace_charm
+from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
 from lightkube.models.core_v1 import ServicePort
 from ops import pebble
 from ops.charm import CharmBase, CollectStatusEvent
@@ -47,6 +49,14 @@ MIMIR_DIR = "/mimir"
 logger = logging.getLogger(__name__)
 
 
+@trace_charm(
+    tracing_endpoint="tempo_endpoint",
+    extra_types=[
+        MimirClusterRequirer,
+        KubernetesServicePatch,
+    ],
+    # TODO add certificate file once TLS support is merged
+)
 class MimirWorkerK8SOperatorCharm(CharmBase):
     """A Juju Charmed Operator for Mimir."""
 
@@ -56,7 +66,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     def __init__(self, *args):
         super().__init__(*args)
         self._container = self.unit.get_container(self._name)
-        self._root_data_dir = Path(self.meta.containers["mimir"].mounts["data"].location)
 
         self.topology = JujuTopology.from_charm(self)
         self.mimir_cluster = MimirClusterRequirer(self)
@@ -64,6 +73,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.service_path = KubernetesServicePatch(
             self, [ServicePort(8080, name=self.app.name)]  # Same API endpoint for all components
         )
+        self.tracing = TracingEndpointRequirer(self)
 
         self.framework.observe(
             self.on.mimir_pebble_ready, self._on_pebble_ready  # pyright: ignore
@@ -237,33 +247,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
         return False
 
-    def _set_data_dirs(self, config: Dict[str, Any]) -> dict:
-        """Set the data-dirs in the config we received from the coordinator.
-
-        - Place all data dirs under a common root data dir, so files are persisted across upgrades.
-          Following the default names from official docs:
-          https://grafana.com/docs/mimir/latest/references/configuration-parameters/
-        """
-        config = config.copy()
-        for key, folder in (
-            ("alertmanager", "data-alertmanager"),
-            ("compactor", "data-compactor"),
-        ):
-            if key not in config:
-                config[key] = {}
-            config[key]["data_dir"] = str(self._root_data_dir / folder)
-
-        # blocks_storage:
-        #   bucket_store:
-        #     sync_dir: /etc/mimir/tsdb-sync
-        #   data_dir: /data/tsdb-sync
-        if config.get("blocks_storage"):
-            config["blocks_storage"] = {
-                "bucket_store": {"sync_dir": str(self._root_data_dir / "tsdb-sync")}
-            }
-
-        return config
-
     def _running_mimir_config(self) -> Optional[dict]:
         """Return the Mimir config as dict, or None if retrieval failed."""
         if not self._container.can_connect():
@@ -309,6 +292,14 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         if not self._mimir_roles:
             e.add_status(BlockedStatus("No roles assigned: please configure some roles"))
         e.add_status(ActiveStatus(""))
+
+    @property
+    def tempo_endpoint(self) -> Optional[str]:
+        """Tempo endpoint for charm tracing."""
+        if self.tracing.is_ready():
+            return self.tracing.otlp_http_endpoint()
+        else:
+            return None
 
 
 if __name__ == "__main__":  # pragma: nocover
