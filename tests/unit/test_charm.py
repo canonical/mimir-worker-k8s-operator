@@ -22,6 +22,7 @@ class TestWithInitialHooks(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.harness = Harness(MimirWorkerK8SOperatorCharm)
         self.harness.set_model_info("foo", str(uuid4()))
+        self.harness.handle_exec("mimir", ["update-ca-certificates", "--fresh"], result=0)
         self.addCleanup(self.harness.cleanup)
         self.harness.set_leader(True)
 
