@@ -18,7 +18,7 @@ import re
 import socket
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import yaml
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
