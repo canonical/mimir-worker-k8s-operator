@@ -237,10 +237,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             logger.warning("cannot update mimir config: coordinator hasn't published one yet.")
             return False
 
-        config = self._set_data_dirs(mimir_config)
-
-        if self._running_mimir_config() != config:
-            config_as_yaml = yaml.safe_dump(config, default_style="|")
+        if self._running_mimir_config() != mimir_config:
+            config_as_yaml = yaml.safe_dump(mimir_config)
             self._container.push(MIMIR_CONFIG_FILE, config_as_yaml, make_dirs=True)
             logger.info("Pushed new Mimir configuration")
             return True
