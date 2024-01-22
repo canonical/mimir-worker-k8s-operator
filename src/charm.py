@@ -19,6 +19,8 @@ import socket
 import subprocess
 from pathlib import Path
 from typing import List, Optional
+from charms.loki_k8s.v1.loki_push_api import LogForwarder
+
 
 import yaml
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
@@ -69,6 +71,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
         self.topology = JujuTopology.from_charm(self)
         self.mimir_cluster = MimirClusterRequirer(self)
+        self.log_forwarder = LogForwarder(self, relation_name="mimir-cluster", loki_endpoints_key="loki-endpoints")
+
 
         self.service_path = KubernetesServicePatch(
             self, [ServicePort(8080, name=self.app.name)]  # Same API endpoint for all components
