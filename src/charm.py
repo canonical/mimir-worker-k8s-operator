@@ -36,6 +36,8 @@ from charms.observability_libs.v1.kubernetes_service_patch import (
 )
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
 from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
+from charms.loki_k8s.v1.loki_push_api import LogForwarder
+
 from lightkube.models.core_v1 import ServicePort
 from ops import pebble
 from ops.charm import CharmBase, CollectStatusEvent
@@ -69,7 +71,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
         self.topology = JujuTopology.from_charm(self)
         self.mimir_cluster = MimirClusterRequirer(self)
-
+        self.log_forwarder = LogForwarder(self)
+        self.log_targets = {}
         self.service_path = KubernetesServicePatch(
             self, [ServicePort(8080, name=self.app.name)]  # Same API endpoint for all components
         )
@@ -85,7 +88,33 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             self.mimir_cluster.on.config_received, self._on_mimir_config_received
         )
         self.framework.observe(self.mimir_cluster.on.created, self._on_mimir_cluster_created)
+        self.framework.observe(self.mimir_cluster.on.loki_endpoints_received, self._on_loki_endpoints_received)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
+
+    def _on_loki_endpoints_received(self, _):
+        current = self.log_forwarder._custom_loki_endpoints
+        if current is None:
+            current = {}
+
+        new_log_targets = self.mimir_cluster.get_loki_endpoints()
+
+        # Identify missing keys in current that are not present in new_log_targets
+        missing_keys_dict = {
+            key: value for key, value in current.items() if key not in new_log_targets
+        }
+
+        # Update _custom_loki_endpoints with the new values
+        current.update(new_log_targets)
+
+        # Set _custom_loki_endpoints to the updated dictionary
+        self.log_forwarder._custom_loki_endpoints = current
+
+        # Enable log forwarder for all keys in _custom_loki_endpoints
+        self.log_forwarder.enable_logging()
+
+        # Disable log forwarder for each missing key
+        for key in missing_keys_dict:
+            self.log_forwarder.disable_logging(key)
 
     def _on_mimir_cluster_created(self, _):
         self._update_mimir_cluster()

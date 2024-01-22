@@ -176,6 +176,7 @@ def expand_roles(roles: Iterable[MimirRole]) -> Set[MimirRole]:
 
 class MimirClusterProviderAppData(DatabagModel):
     mimir_config: Dict[str, Any]
+    loki_endpoints: Dict[str, str]
     # todo: validate with
     #  https://grafana.com/docs/mimir/latest/configure/about-configurations/#:~:text=Validate%20a%20configuration,or%20in%20a%20CI%20environment.
     #  caveat: only the requirer node can do it
@@ -216,10 +217,12 @@ class MimirClusterProvider(Object):
 
     def publish_configs(self,
                         mimir_config: Dict[str, Any],
+                        loki_endpoints: Dict[str, str],
                         ) -> None:
         """Publish the mimir config to all related mimir worker clusters."""
         databag_model = MimirClusterProviderAppData(
             mimir_config=mimir_config,
+            loki_endpoints=loki_endpoints
         )
         for relation in self._relations:
             if relation:
@@ -277,7 +280,7 @@ class MimirClusterProvider(Object):
         addresses_by_role = self.gather_addresses_by_role()
         for role, address_set in addresses_by_role.items():
             data.update(address_set)
-
+        
         return data
 
 
@@ -312,9 +315,13 @@ class ConfigReceivedEvent(ops.EventBase):
         self.relation = json.loads(snapshot['config'])
 
 
+class LokiEndpointsReceivedEvent(ops.EventBase):
+    """Event emitted when the "mimir-cluster" provider has a new loki endpoint"""
+
 class MimirClusterRequirerEvents(ObjectEvents):
     """Events emitted by the MimirClusterRequirer "mimir-cluster" endpoint wrapper."""
     config_received = EventSource(ConfigReceivedEvent)
+    loki_endpoints_received = EventSource(LokiEndpointsReceivedEvent)
     created = EventSource(RelationCreatedEvent)
     removed = EventSource(MimirClusterRemovedEvent)
 
@@ -353,6 +360,10 @@ class MimirClusterRequirer(Object):
             new_config = self.get_mimir_config()
             if new_config:
                 self.on.config_received.emit(new_config)
+
+            loki_endpoints = self.get_loki_endpoints()
+            if loki_endpoints:
+                self.on.loki_endpoints_received.emit()
 
             # if we have published our data, but we receive an empty/invalid config,
             # then the remote end must have removed it.
@@ -417,6 +428,20 @@ class MimirClusterRequirer(Object):
                 databag = relation.data[relation.app]  # type: ignore # all checks are done in __init__
                 coordinator_databag = MimirClusterProviderAppData.load(databag)
                 data = coordinator_databag.mimir_config
+            except DataValidationError as e:
+                log.error(f"invalid databag contents: {e}")
+                return {}
+        return data
+
+    def get_loki_endpoints(self) -> Dict[str, str]:
+        """Fetch the loki endpoints from the coordinator databag."""
+        data = {}
+        relation = self.relation
+        if relation:
+            try:
+                databag = relation.data[relation.app]  # type: ignore # all checks are done in __init__
+                coordinator_databag = MimirClusterProviderAppData.load(databag)
+                data = coordinator_databag.loki_endpoints
             except DataValidationError as e:
                 log.error(f"invalid databag contents: {e}")
                 return {}
