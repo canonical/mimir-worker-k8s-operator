@@ -279,6 +279,10 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         if not self._container.exists(MIMIR_CONFIG_FILE):
             logger.error("cannot restart mimir: config file doesn't exist (yet).")
 
+        if not self._mimir_roles:
+            logger.warning("cannot restart mimir: no roles have been configured.")
+            return
+
         try:
             if self._container.get_service(self._name).is_running():
                 self._container.restart(self._name)
