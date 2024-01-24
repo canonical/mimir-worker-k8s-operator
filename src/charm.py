@@ -18,7 +18,7 @@ import re
 import socket
 import subprocess
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
@@ -30,17 +30,18 @@ from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
     MimirClusterRequirer,
     MimirRole,
 )
-from charms.observability_libs.v0.juju_topology import JujuTopology
+from cosl import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
 from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
-from charms.loki_k8s.v1.loki_push_api import ManualLogForwarder
+from charms.loki_k8s.v1.loki_push_api import _PebbleLogClient
 
 from lightkube.models.core_v1 import ServicePort
 from ops import pebble
 from ops.charm import CharmBase, CollectStatusEvent
+from ops.framework import BoundEvent, Object
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 from ops.pebble import PathError, ProtocolError
@@ -74,9 +75,13 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.log_forwarder = ManualLogForwarder(
             charm=self,
             loki_endpoints=self.mimir_cluster.get_loki_endpoints(),
-            relation_name="mimir-cluster",
+            refresh_events=[
+                self.on["mimir-cluster"].relation_joined,
+                self.on["mimir-cluster"].relation_changed,
+                self.on["mimir-cluster"].relation_departed,
+                self.on["mimir-cluster"].relation_broken,
+            ],
         )
-        self.log_targets = {}
         self.service_path = KubernetesServicePatch(
             self, [ServicePort(8080, name=self.app.name)]  # Same API endpoint for all components
         )
@@ -305,6 +310,47 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             return self.tracing.otlp_http_endpoint()
         else:
             return None
+
+
+class ManualLogForwarder(Object):
+    """Forward the standard outputs of all workloads to explictly-provided Loki endpoints."""
+
+    def __init__(
+        self,
+        charm: CharmBase,
+        *,
+        loki_endpoints: Optional[Dict[str, str]],
+        refresh_events: Optional[List[BoundEvent]] = None,
+    ):
+        _PebbleLogClient.check_juju_version()
+        super().__init__(charm, "mimir-cluster")
+        self._charm = charm
+        self._loki_endpoints = loki_endpoints
+        self._topology = JujuTopology.from_charm(charm)
+
+        if not refresh_events:
+            return
+
+        for event in refresh_events:
+            self.framework.observe(event, self.update_logging)
+
+
+    def update_logging(self, _ = None):
+        """Update the log forwarding to match the active Loki endpoints."""
+        loki_endpoints = self._loki_endpoints
+
+        if not loki_endpoints:
+            logger.warning("No Loki endpoints available")
+
+        for container in self._charm.unit.containers.values():
+            _PebbleLogClient.disable_inactive_endpoints(
+                container=container,
+                active_endpoints=loki_endpoints,
+                topology=self._topology,
+            )
+            _PebbleLogClient.enable_endpoints(
+                container=container, active_endpoints=loki_endpoints, topology=self._topology
+            )
 
 
 if __name__ == "__main__":  # pragma: nocover
