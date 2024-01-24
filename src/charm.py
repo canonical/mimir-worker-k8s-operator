@@ -246,6 +246,43 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
         return False
 
+    def _set_data_dirs(self, config: Dict[str, Any]) -> dict:
+        """Set the data-dirs in the config we received from the coordinator.
+
+        - Place all data dirs under a common root data dir, so files are persisted across upgrades.
+          Following the default names from official docs:
+          https://grafana.com/docs/mimir/latest/references/configuration-parameters/
+        """
+        config = config.copy()
+
+        if "alertmanager" not in config:
+            config["alertmanager"] = {}
+
+        # Directory to store Alertmanager state and temporarily configuration files. The
+        # content of this directory is not required to be persisted between restarts
+        # unless Alertmanager replication has been disabled.
+        # CLI flag: -alertmanager.storage.path
+        config["alertmanager"]["data_dir"] = str(self._root_data_dir / "data-alertmanager")
+
+        # Path at which alertmanager configurations are stored.
+        # CLI flag: -alertmanager-storage.local.path
+        config["alertmanager"]["local"] = {"path": str(self._root_data_dir / "local-storage-alertmanager")}
+
+        if "compactor" not in config:
+            config["compactor"] = {}
+        config["compactor"]["data_dir"] = str(self._root_data_dir / "data-compactor")
+
+        # blocks_storage:
+        #   bucket_store:
+        #     sync_dir: /etc/mimir/tsdb-sync
+        #   data_dir: /data/tsdb-sync
+        if config.get("blocks_storage"):
+            config["blocks_storage"] = {
+                "bucket_store": {"sync_dir": str(self._root_data_dir / "tsdb-sync")}
+            }
+
+        return config
+
     def _running_mimir_config(self) -> Optional[dict]:
         """Return the Mimir config as dict, or None if retrieval failed."""
         if not self._container.can_connect():
