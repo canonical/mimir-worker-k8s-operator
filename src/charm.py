@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
+from charms.loki_k8s.v1.loki_push_api import _PebbleLogClient
 from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
     MIMIR_CERT_FILE,
     MIMIR_CLIENT_CA_FILE,
@@ -30,14 +31,12 @@ from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
     MimirClusterRequirer,
     MimirRole,
 )
-from cosl import JujuTopology
 from charms.observability_libs.v1.kubernetes_service_patch import (
     KubernetesServicePatch,
 )
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
 from charms.tempo_k8s.v1.tracing import TracingEndpointRequirer
-from charms.loki_k8s.v1.loki_push_api import _PebbleLogClient
-
+from cosl import JujuTopology
 from lightkube.models.core_v1 import ServicePort
 from ops import pebble
 from ops.charm import CharmBase, CollectStatusEvent
@@ -344,13 +343,13 @@ class ManualLogForwarder(Object):
         for event in refresh_events:
             self.framework.observe(event, self.update_logging)
 
-
-    def update_logging(self, _ = None):
+    def update_logging(self, _=None):
         """Update the log forwarding to match the active Loki endpoints."""
         loki_endpoints = self._loki_endpoints
 
         if not loki_endpoints:
             logger.warning("No Loki endpoints available")
+            loki_endpoints = {}
 
         for container in self._charm.unit.containers.values():
             _PebbleLogClient.disable_inactive_endpoints(
