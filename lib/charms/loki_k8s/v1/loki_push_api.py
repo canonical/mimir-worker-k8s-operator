@@ -2363,7 +2363,7 @@ class _PebbleLogClient:
         juju_version = JujuVersion.from_environ()
         if not juju_version > JujuVersion(version=str("3.3")):
             msg = f"Juju version {juju_version} does not support Pebble log forwarding. Juju >= 3.4 is needed."
-            logger.warn(msg)
+            logger.warning(msg)
             return False
         return True
 
@@ -2531,8 +2531,8 @@ class LogForwarder(ConsumerBase):
         Returns:
             A dictionary of remote units and the respective Loki endpoint.
             {
-                "loki/0": "http://loki1:3100/loki/api/v1/push",
-                "another-loki/0": "http://loki2:3100/loki/api/v1/push",
+                "loki/0": "http://loki:3100/loki/api/v1/push",
+                "another-loki/0": "http://another-loki:3100/loki/api/v1/push",
             }
         """
         endpoints: Dict = {}
@@ -2550,7 +2550,7 @@ class LogForwarder(ConsumerBase):
         endpoints: Dict = {}
 
         if not self.is_ready(relation):
-            logger.warn(f"The relation '{relation.name}' is not ready yet.")
+            logger.warning(f"The relation '{relation.name}' is not ready yet.")
             return endpoints
 
         # if the code gets here, the function won't raise anymore because it's
@@ -2558,6 +2558,7 @@ class LogForwarder(ConsumerBase):
         endpoints = self._extract_urls(relation)
 
         return endpoints
+
 
 class CosTool:
     """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
