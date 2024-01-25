@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 
 @trace_charm(
     tracing_endpoint="tempo_endpoint",
+    server_cert="server_cert_path",
     extra_types=[
         MimirClusterRequirer,
         KubernetesServicePatch,
@@ -314,6 +315,11 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             return self.tracing.otlp_http_endpoint()
         else:
             return None
+
+    @property
+    def server_cert_path(self) -> Optional[str]:
+        """Server certificate path for tls tracing."""
+        return MIMIR_CERT_FILE
 
 
 class ManualLogForwarder(Object):
