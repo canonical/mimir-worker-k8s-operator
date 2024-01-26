@@ -78,8 +78,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             refresh_events=[
                 self.on["mimir-cluster"].relation_joined,
                 self.on["mimir-cluster"].relation_changed,
-                self.on["mimir-cluster"].relation_departed,
-                self.on["mimir-cluster"].relation_broken,
             ],
         )
         self.service_path = KubernetesServicePatch(
@@ -91,13 +89,20 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             self.on.mimir_pebble_ready, self._on_pebble_ready  # pyright: ignore
         )
         self.framework.observe(self.on.config_changed, self._on_config_changed)
-
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
+        self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
+
+        # Mimir Cluster
         self.framework.observe(
             self.mimir_cluster.on.config_received, self._on_mimir_config_received
         )
         self.framework.observe(self.mimir_cluster.on.created, self._on_mimir_cluster_created)
-        self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
+        self.framework.observe(
+            self.on.mimir_cluster_relation_departed, self.log_forwarder.disable_logging
+        )
+        self.framework.observe(
+            self.on.mimir_cluster_relation_broken, self.log_forwarder.disable_logging
+        )
 
     def _on_mimir_cluster_created(self, _):
         self._update_mimir_cluster()
@@ -359,6 +364,15 @@ class ManualLogForwarder(Object):
             )
             _PebbleLogClient.enable_endpoints(
                 container=container, active_endpoints=loki_endpoints, topology=self._topology
+            )
+
+    def disable_logging(self, _=None):
+        """Disable all log forwarding."""
+        # This is currently necessary because, after a relation broken, the charm can still see
+        # the Loki endpoints in the relation data.
+        for container in self._charm.unit.containers.values():
+            _PebbleLogClient.disable_inactive_endpoints(
+                container=container, active_endpoints={}, topology=self._topology
             )
 
 
