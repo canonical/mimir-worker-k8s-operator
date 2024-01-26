@@ -10,7 +10,7 @@ import json
 import logging
 from collections import defaultdict
 from enum import Enum
-from typing import Any, Dict, MutableMapping, Set, List, Iterable, TypeVar, Protocol, Union
+from typing import Any, Dict, MutableMapping, Set, List, Iterable
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -32,6 +32,7 @@ MIMIR_CONFIG_FILE = "/etc/mimir/mimir-config.yaml"
 MIMIR_CERT_FILE = "/etc/mimir/server.cert"
 MIMIR_KEY_FILE = "/etc/mimir/private.key"
 MIMIR_CLIENT_CA_FILE = "/etc/mimir/ca.cert"
+
 
 class MimirClusterError(Exception):
     """Base class for exceptions raised by this module."""
@@ -66,14 +67,14 @@ class DatabagModel(BaseModel):
             data = {k: json.loads(v) for k, v in databag.items() if k not in BUILTIN_JUJU_KEYS}
         except json.JSONDecodeError as e:
             msg = f"invalid databag contents: expecting json. {databag}"
-            log.error(msg)
+            log.info(msg)
             raise DataValidationError(msg) from e
 
         try:
             return cls.parse_raw(json.dumps(data))  # type: ignore
         except pydantic.ValidationError as e:
             msg = f"failed to validate databag: {databag}"
-            log.error(msg, exc_info=True)
+            log.info(msg, exc_info=True)
             raise DataValidationError(msg) from e
 
     def dump(self, databag: Optional[MutableMapping[str, str]] = None, clear: bool = True):
@@ -91,12 +92,29 @@ class DatabagModel(BaseModel):
         if nest_under:
             databag[nest_under] = self.json()
 
-        dct = self.model_dump()
+        dct = self.model_dump(by_alias=True)
         for key, field in self.model_fields.items():  # type: ignore
             value = dct[key]
             databag[field.alias or key] = json.dumps(value)
-
         return databag
+
+    def update(self, **data: Any):
+        """Update in-place the contents of this databag model.
+
+        Note that this will not update the databag itself.
+
+        Usage:
+
+        >>> databag_contents = DatabagModel.load(relation.data[self.app])
+        >>> databag_contents.update(foo=42)
+        >>> databag_contents.dump(relation.data[self.app])
+        """
+
+        for key, value in data.items():
+            if key not in self.model_fields:
+                # this would set the attribute but not actually update the model!
+                raise ValueError(f"cannot update {key}: not declared in model")
+            setattr(self, key, value)
 
 
 class DataBagSchema(BaseModel):
@@ -176,7 +194,7 @@ def expand_roles(roles: Iterable[MimirRole]) -> Set[MimirRole]:
 
 class MimirClusterProviderAppData(DatabagModel):
     mimir_config: Dict[str, Any]
-    loki_endpoints: Dict[str, str]
+    loki_endpoints: Optional[Dict[str, str]] = None
     # todo: validate with
     #  https://grafana.com/docs/mimir/latest/configure/about-configurations/#:~:text=Validate%20a%20configuration,or%20in%20a%20CI%20environment.
     #  caveat: only the requirer node can do it
@@ -215,19 +233,16 @@ class MimirClusterProvider(Object):
         self._charm = charm
         self._relations = self.model.relations[endpoint]
 
-    def publish_configs(self,
-                        mimir_config: Dict[str, Any],
-                        loki_endpoints: Dict[str, str],
-                        ) -> None:
-        """Publish the mimir config to all related mimir worker clusters."""
-        databag_model = MimirClusterProviderAppData(
-            mimir_config=mimir_config,
-            loki_endpoints=loki_endpoints
-        )
+    def publish_data(self,
+                     mimir_config: Dict[str, Any],
+                     loki_endpoints: Optional[Dict[str, str]],
+                     ) -> None:
+        """Publish the mimir config and loki endpoints to all related mimir worker clusters."""
         for relation in self._relations:
             if relation:
-                local_app_databag = relation.data[self.model.app]
-                databag_model.dump(local_app_databag)
+                local_app_databag = MimirClusterProviderAppData(mimir_config=mimir_config,
+                                                                loki_endpoints=loki_endpoints)
+                local_app_databag.dump(relation.data[self.model.app])
 
     def gather_roles(self) -> Dict[MimirRole, int]:
         """Go through the worker's app databags and sum the available application roles."""
@@ -238,7 +253,7 @@ class MimirClusterProvider(Object):
                 try:
                     worker_roles: List[MimirRole] = MimirClusterRequirerAppData.load(remote_app_databag).roles
                 except DataValidationError as e:
-                    log.error(f"invalid databag contents: {e}")
+                    log.info(f"invalid databag contents: {e}")
                     worker_roles = []
 
                 # the number of units with each role is the number of remote units
@@ -259,8 +274,13 @@ class MimirClusterProvider(Object):
                 log.debug(f"skipped {relation} as .app is None")
                 continue
 
-            worker_app_data = MimirClusterRequirerAppData.load(relation.data[relation.app])
-            worker_roles = set(worker_app_data.roles)
+            try:
+                worker_app_data = MimirClusterRequirerAppData.load(relation.data[relation.app])
+                worker_roles = set(worker_app_data.roles)
+            except DataValidationError as e:
+                log.info(f"invalid databag contents: {e}")
+                continue
+
             for worker_unit in relation.units:
                 try:
                     worker_data = MimirClusterRequirerUnitData.load(relation.data[worker_unit])
@@ -268,11 +288,10 @@ class MimirClusterProvider(Object):
                     for role in worker_roles:
                         data[role].add(unit_address)
                 except DataValidationError as e:
-                    log.error(f"invalid databag contents: {e}")
+                    log.info(f"invalid databag contents: {e}")
                     continue
 
         return data
-
 
     def gather_addresses(self) -> Set[str]:
         """Go through the worker's unit databags to collect all the addresses published by the units."""
@@ -280,7 +299,7 @@ class MimirClusterProvider(Object):
         addresses_by_role = self.gather_addresses_by_role()
         for role, address_set in addresses_by_role.items():
             data.update(address_set)
-        
+
         return data
 
 
@@ -315,13 +334,9 @@ class ConfigReceivedEvent(ops.EventBase):
         self.relation = json.loads(snapshot['config'])
 
 
-class LokiEndpointsReceivedEvent(ops.EventBase):
-    """Event emitted when the "mimir-cluster" provider has a new loki endpoint"""
-
 class MimirClusterRequirerEvents(ObjectEvents):
     """Events emitted by the MimirClusterRequirer "mimir-cluster" endpoint wrapper."""
     config_received = EventSource(ConfigReceivedEvent)
-    loki_endpoints_received = EventSource(LokiEndpointsReceivedEvent)
     created = EventSource(RelationCreatedEvent)
     removed = EventSource(MimirClusterRemovedEvent)
 
@@ -361,10 +376,6 @@ class MimirClusterRequirer(Object):
             if new_config:
                 self.on.config_received.emit(new_config)
 
-            loki_endpoints = self.get_loki_endpoints()
-            if loki_endpoints:
-                self.on.loki_endpoints_received.emit()
-
             # if we have published our data, but we receive an empty/invalid config,
             # then the remote end must have removed it.
             elif self.is_published():
@@ -387,7 +398,7 @@ class MimirClusterRequirer(Object):
             MimirClusterRequirerUnitData.load(unit_data)
             MimirClusterRequirerAppData.load(app_data)
         except DataValidationError as e:
-            log.error(f"invalid databag contents: {e}")
+            log.info(f"invalid databag contents: {e}")
             return False
         return True
 
@@ -429,7 +440,7 @@ class MimirClusterRequirer(Object):
                 coordinator_databag = MimirClusterProviderAppData.load(databag)
                 data = coordinator_databag.mimir_config
             except DataValidationError as e:
-                log.error(f"invalid databag contents: {e}")
+                log.info(f"invalid databag contents: {e}")
                 return {}
         return data
 
@@ -443,11 +454,11 @@ class MimirClusterRequirer(Object):
                 coordinator_databag = MimirClusterProviderAppData.load(databag)
                 data = coordinator_databag.loki_endpoints
             except DataValidationError as e:
-                log.error(f"invalid databag contents: {e}")
+                log.info(f"invalid databag contents: {e}")
                 return {}
-        return data
+        return data or {}
 
     def get_cert_secret_ids(self) -> Optional[str]:
         """Fetch certificates secrets ids for the mimir config."""
         if self.relation and self.relation.app:
-                return self.relation.data[self.relation.app].get("secrets", None)
+            return self.relation.data[self.relation.app].get("secrets", None)
