@@ -9,7 +9,7 @@ As this relation is cluster-internal and not intended for third-party charms to 
 
 import json
 import logging
-from enum import Enum
+from enum import Enum, unique
 from typing import Any, Dict, Iterable, List, MutableMapping, Optional, Set
 from urllib.parse import urlparse
 
@@ -28,6 +28,9 @@ MIMIR_KEY_FILE = "/etc/mimir/private.key"
 MIMIR_CLIENT_CA_FILE = "/etc/mimir/ca.cert"
 
 
+# TODO: inherit enum.StrEnum when jammy is no longer supported.
+# https://docs.python.org/3/library/enum.html#enum.StrEnum
+@unique
 class MimirRole(str, Enum):
     """Mimir component role names."""
 
