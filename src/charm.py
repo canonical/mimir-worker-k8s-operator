@@ -17,11 +17,10 @@ import re
 from typing import Optional
 
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
-from cosl.distributed.worker import Worker, CONFIG_FILE, CERT_FILE
+from cosl.coordinated_workers.worker import CERT_FILE, CONFIG_FILE, Worker
 from ops.charm import CharmBase
 from ops.main import main
 from ops.pebble import Layer
-
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -60,18 +59,20 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         """Return a dictionary representing a Pebble layer."""
         targets = ",".join(sorted(worker.roles))
 
-        return Layer({
-            "summary": "mimir worker layer",
-            "description": "pebble config layer for mimir worker",
-            "services": {
-                "mimir": {
-                    "override": "replace",
-                    "summary": "mimir worker daemon",
-                    "command": f"/bin/mimir --config.file={CONFIG_FILE} -target {targets} -auth.multitenancy-enabled=false",
-                    "startup": "enabled",
-                }
-            },
-        })
+        return Layer(
+            {
+                "summary": "mimir worker layer",
+                "description": "pebble config layer for mimir worker",
+                "services": {
+                    "mimir": {
+                        "override": "replace",
+                        "summary": "mimir worker daemon",
+                        "command": f"/bin/mimir --config.file={CONFIG_FILE} -target {targets} -auth.multitenancy-enabled=false",
+                        "startup": "enabled",
+                    }
+                },
+            }
+        )
 
     @property
     def _mimir_version(self) -> Optional[str]:
