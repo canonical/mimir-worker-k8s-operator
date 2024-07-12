@@ -35,18 +35,19 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
 
     _name = "mimir"
     _instance_addr = "127.0.0.1"
+    _mimir_port = 8080
 
     def __init__(self, *args):
         super().__init__(*args)
         self.worker = Worker(
             charm=self,
             name="mimir",
-            ports=[8080],
             pebble_layer=self.pebble_layer,
-            endpoints={"cluster": "mimir-cluster"},
+            endpoints={"cluster": "mimir-cluster", "tracing": "tracing"},
         )
 
         self._container = self.model.unit.get_container(self._name)
+        self.unit.set_ports(self._mimir_port)
 
         self.framework.observe(
             self.on.mimir_pebble_ready, self._on_pebble_ready  # pyright: ignore
@@ -90,7 +91,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     def tempo_endpoint(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
         if self.worker.tracing.is_ready():
-            return self.worker.tracing.otlp_http_endpoint()
+            return self.worker.tracing.get_endpoint(protocol="otlp_http")
         else:
             return None
 
