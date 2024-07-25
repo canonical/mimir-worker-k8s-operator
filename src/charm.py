@@ -43,7 +43,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             charm=self,
             name="mimir",
             pebble_layer=self.pebble_layer,
-            endpoints={"cluster": "mimir-cluster", "tracing": "tracing"},
+            endpoints={"cluster": "mimir-cluster"},
         )
 
         self._container = self.model.unit.get_container(self._name)
@@ -90,10 +90,8 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
     @property
     def tempo_endpoint(self) -> Optional[str]:
         """Tempo endpoint for charm tracing."""
-        if self.worker.tracing.is_ready():
-            return self.worker.tracing.get_endpoint(protocol="otlp_http")
-        else:
-            return None
+        if endpoints := self.worker.cluster.get_tracing_receivers():
+            return endpoints.get("otlp_http", None)
 
     @property
     def server_cert_path(self) -> Optional[str]:
