@@ -42,7 +42,6 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self._container = self.model.unit.get_container(self._name)
         self.unit.set_ports(self._mimir_port)
 
-
     def pebble_layer(self, worker: Worker) -> Layer:
         """Return a dictionary representing a Pebble layer."""
         targets = ",".join(sorted(worker.roles))

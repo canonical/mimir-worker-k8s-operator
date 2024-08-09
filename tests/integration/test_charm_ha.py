@@ -4,7 +4,6 @@
 
 # pyright: reportAttributeAccessIssue=false
 
-import asyncio
 import logging
 
 import pytest
@@ -21,16 +20,18 @@ from helpers import (
 from pytest_operator.plugin import OpsTest
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from tests.integration.test_charm_ha_scaled import asyncio
+
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.setup
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest):
+async def test_build_and_deploy(ops_test: OpsTest, mimir_charm: str):
     """Build the charm-under-test and deploy it together with related charms."""
     assert ops_test.model is not None  # for pyright
     await asyncio.gather(
-        ops_test.model.deploy("mimir-coordinator-k8s", "mimir", channel="latest/edge"),
+        ops_test.model.deploy(mimir_charm, "mimir", resources=charm_resources()),
         ops_test.model.deploy("prometheus-k8s", "prometheus", channel="latest/edge"),
         ops_test.model.deploy("loki-k8s", "loki", channel="latest/edge"),
         ops_test.model.deploy("grafana-k8s", "grafana", channel="latest/edge"),
@@ -58,16 +59,30 @@ async def test_build_and_deploy(ops_test: OpsTest):
 
 @pytest.mark.setup
 @pytest.mark.abort_on_fail
-async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
+async def test_deploy_workers(ops_test: OpsTest):
     """Deploy the Mimir workers."""
     assert ops_test.model is not None
     await ops_test.model.deploy(
-        worker_charm,
-        "worker",
-        config={"role-all": True, "role-query-frontend": True},
-        resources=charm_resources(),
+        "mimir-worker-k8s",
+        "worker-read",
+        channel="latest/edge",
+        config={"role-read": True},
     )
-    await ops_test.model.wait_for_idle(apps=["worker"], status="blocked")
+    await ops_test.model.deploy(
+        "mimir-worker-k8s",
+        "worker-write",
+        channel="latest/edge",
+        config={"role-write": True},
+    )
+    await ops_test.model.deploy(
+        "mimir-worker-k8s",
+        "worker-backend",
+        channel="latest/edge",
+        config={"role-backend": True},
+    )
+    await ops_test.model.wait_for_idle(
+        apps=["worker-read", "worker-write", "worker-backend"], status="blocked"
+    )
 
 
 @pytest.mark.setup
@@ -76,7 +91,9 @@ async def test_integrate(ops_test: OpsTest):
     assert ops_test.model is not None
     await asyncio.gather(
         ops_test.model.integrate("mimir:s3", "s3"),
-        ops_test.model.integrate("mimir:mimir-cluster", "worker"),
+        ops_test.model.integrate("mimir:mimir-cluster", "worker-read"),
+        ops_test.model.integrate("mimir:mimir-cluster", "worker-write"),
+        ops_test.model.integrate("mimir:mimir-cluster", "worker-backend"),
         ops_test.model.integrate("mimir:self-metrics-endpoint", "prometheus"),
         ops_test.model.integrate("mimir:grafana-dashboards-provider", "grafana"),
         ops_test.model.integrate("mimir:grafana-source", "grafana"),
@@ -95,7 +112,9 @@ async def test_integrate(ops_test: OpsTest):
             "agent",
             "minio",
             "s3",
-            "worker",
+            "worker-read",
+            "worker-write",
+            "worker-backend",
             "traefik",
         ],
         status="active",
