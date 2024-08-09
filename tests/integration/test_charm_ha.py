@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 
 @pytest.mark.setup
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest, mimir_charm: str):
+async def test_build_and_deploy(ops_test: OpsTest):
     """Build the charm-under-test and deploy it together with related charms."""
     assert ops_test.model is not None  # for pyright
     await asyncio.gather(
-        ops_test.model.deploy(mimir_charm, "mimir", resources=charm_resources()),
+        ops_test.model.deploy("mimir-coordinator-k8s", "mimir", channel="latest/edge"),
         ops_test.model.deploy("prometheus-k8s", "prometheus", channel="latest/edge"),
         ops_test.model.deploy("loki-k8s", "loki", channel="latest/edge"),
         ops_test.model.deploy("grafana-k8s", "grafana", channel="latest/edge"),
@@ -59,26 +59,26 @@ async def test_build_and_deploy(ops_test: OpsTest, mimir_charm: str):
 
 @pytest.mark.setup
 @pytest.mark.abort_on_fail
-async def test_deploy_workers(ops_test: OpsTest):
+async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
     """Deploy the Mimir workers."""
     assert ops_test.model is not None
     await ops_test.model.deploy(
-        "mimir-worker-k8s",
+        worker_charm,
         "worker-read",
-        channel="latest/edge",
         config={"role-read": True},
+        resources=charm_resources(),
     )
     await ops_test.model.deploy(
-        "mimir-worker-k8s",
+        worker_charm,
         "worker-write",
-        channel="latest/edge",
         config={"role-write": True},
+        resources=charm_resources(),
     )
     await ops_test.model.deploy(
-        "mimir-worker-k8s",
+        worker_charm,
         "worker-backend",
-        channel="latest/edge",
         config={"role-backend": True},
+        resources=charm_resources(),
     )
     await ops_test.model.wait_for_idle(
         apps=["worker-read", "worker-write", "worker-backend"], status="blocked"
