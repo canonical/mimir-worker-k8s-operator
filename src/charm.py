@@ -19,10 +19,13 @@ from ops.charm import CharmBase
 from ops.main import main
 from ops.pebble import Layer
 
+from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
+
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 
 
+@trace_charm(tracing_endpoint="_charm_tracing_endpoint", server_cert="_charm_tracing_cert")
 class MimirWorkerK8SOperatorCharm(CharmBase):
     """A Juju Charmed Operator for Mimir."""
 
@@ -38,6 +41,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
             pebble_layer=self.pebble_layer,
             endpoints={"cluster": "mimir-cluster"},
         )
+        self._charm_tracing_endpoint, self._charm_tracing_cert = self.worker.charm_tracing_config()
 
         self._container = self.model.unit.get_container(self._name)
         self.unit.set_ports(self._mimir_port)
