@@ -19,7 +19,7 @@ from ops.charm import CharmBase
 from ops.main import main
 from ops.pebble import Layer
 
-from lib.charms.tempo_k8s.v1.charm_tracing import trace_charm
+from charms.tempo_k8s.v1.charm_tracing import trace_charm
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
