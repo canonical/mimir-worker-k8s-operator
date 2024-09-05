@@ -17,7 +17,8 @@ variable "channel" {
 variable "revision" {
   description = "Charm revision"
   type        = number
-  # nullable = true
+  nullable = true
+  default = null
 }
 
 variable "config" {

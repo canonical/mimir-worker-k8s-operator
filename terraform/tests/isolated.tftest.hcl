@@ -17,7 +17,7 @@ run "deploy_app" {
   }
 
   assert {
-    condition     = juju_application.mimir_worker.app_name == "worker-${run.setup_tests.app_name_suffix}"
+    condition     = juju_application.mimir_worker.name == "worker-${run.setup_tests.app_name_suffix}"
     error_message = "App name mismatch"
   }
 }
