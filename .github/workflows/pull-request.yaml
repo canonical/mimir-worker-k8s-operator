@@ -37,4 +37,4 @@ jobs:
           microk8s-addons: "hostpath-storage dns"
           charmcraft-channel: "3.x/stable"
       - name: Run integration tests
-        run: cd terraform && terraform init && terraform test
+        run: juju add-model mimir5 && cd terraform && terraform init && terraform test
