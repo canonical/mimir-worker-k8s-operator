@@ -21,7 +21,7 @@ variable "model_name" {
 
 
 resource "juju_application" "minio" {
-  name  = "minio"
+  name = "minio"
   # Coordinator requires s3
   model = var.model_name
   trust = true
@@ -33,19 +33,13 @@ resource "juju_application" "minio" {
   units = 1
 
   config = {
-    access-key="user"
-    secret-key="password"
-  }
-
-  provisioner "local-exec" {
-    # There's currently no way to wait for the charm to be idle, hence the sleep
-    # https://github.com/juju/terraform-provider-juju/issues/202
-    #command = "sleep 300;juju ssh -m ${var.model_name} minio/leader curl https://dl.min.io/client/mc/release/linux-amd64/mc --create-dirs -o '/root/minio/mc';juju ssh -m ${var.model_name} minio/leader chmod +x '/root/minio/mc';juju ssh -m ${var.model_name} minio/leader /root/minio/mc mb mimir"
+    access-key = "user"
+    secret-key = "password"
   }
 }
 
 resource "juju_application" "s3int" {
-  name  = "s3int"
+  name = "s3int"
 
   model = var.model_name
   trust = true
@@ -58,18 +52,12 @@ resource "juju_application" "s3int" {
 
   config = {
     endpoint = "${juju_application.minio.name}-0.${juju_application.minio.name}-endpoints.${var.model_name}.svc.cluster.local:9000"
-    bucket = "mimir"
+    bucket   = "mimir"
   }
-
-  #provisioner "local-exec" {
-    # There's currently no way to wait for the charm to be idle, hence the sleep
-    # https://github.com/juju/terraform-provider-juju/issues/202
-  #  command = "sleep 300;juju run -m ${var.model_name} s3int/leader sync-s3-credentials access-key=user secret-key=password"
-  #}
 }
 
 resource "juju_application" "coord1" {
-  name  = "coord1"
+  name = "coord1"
   # Coordinator and worker must be in the same model
   model = var.model_name
   trust = true

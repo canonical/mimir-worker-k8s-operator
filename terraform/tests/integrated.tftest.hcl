@@ -36,7 +36,7 @@ run "deploy_minimal_context" {
   }
 
   variables {
-    app_name = "worker-${run.setup_tests.app_name_suffix}"
+    app_name   = "worker-${run.setup_tests.app_name_suffix}"
     model_name = "mimir5"
   }
 
