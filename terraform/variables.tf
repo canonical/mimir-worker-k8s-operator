@@ -17,14 +17,14 @@ variable "channel" {
 variable "revision" {
   description = "Charm revision"
   type        = number
-  nullable = true
-  default = null
+  nullable    = true
+  default     = null
 }
 
 variable "config" {
   description = "Config options as in the ones we pass in juju config"
-  type = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
 }
 
 variable "units" {
@@ -35,8 +35,8 @@ variable "units" {
 
 variable "trust" {
   description = "Equiv of juju deploy --trust"
-  type = bool
-  default = false
+  type        = bool
+  default     = false
 }
 
 

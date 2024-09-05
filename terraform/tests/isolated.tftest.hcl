@@ -9,11 +9,11 @@ run "setup_tests" {
 
 run "deploy_app" {
   variables {
-    app_name = "worker-${run.setup_tests.app_name_suffix}"
+    app_name   = "worker-${run.setup_tests.app_name_suffix}"
     model_name = "mimir5"
-    channel = "latest/edge"
-    units = 1
-    trust = true
+    channel    = "latest/edge"
+    units      = 1
+    trust      = true
   }
 
   assert {
