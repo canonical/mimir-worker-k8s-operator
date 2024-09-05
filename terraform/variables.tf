@@ -1,12 +1,6 @@
-variable "application_name" {
+variable "app_name" {
   description = "Application name"
   type        = string
-}
-
-variable "charm_channel" {
-  description = "Charm channel"
-  type        = string
-  default     = "latest/stable"
 }
 
 variable "model_name" {
@@ -14,7 +8,25 @@ variable "model_name" {
   type        = string
 }
 
-variable "num_units" {
+variable "channel" {
+  description = "Charm channel"
+  type        = string
+  default     = "latest/stable"
+}
+
+variable "revision" {
+  description = "Charm revision"
+  type        = number
+  # nullable = true
+}
+
+variable "config" {
+  description = "Config options as in the ones we pass in juju config"
+  type = map(string)
+  default = {}
+}
+
+variable "units" {
   description = "Number of units"
   type        = number
   default     = 1
@@ -26,8 +38,4 @@ variable "trust" {
   default = false
 }
 
-variable "config" {
-  description = "Config options as in the ones we pass in juju config"
-  type = map(string)
-  default = {}
-}
+

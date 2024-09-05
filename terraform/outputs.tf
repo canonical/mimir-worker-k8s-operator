@@ -1,3 +1,3 @@
-output "application_name" {
+output "app_name" {
   value = juju_application.mimir_worker.name
 }
