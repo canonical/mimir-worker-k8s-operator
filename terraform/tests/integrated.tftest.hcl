@@ -38,12 +38,13 @@ run "deploy_minimal_context" {
   variables {
     app_name   = "worker-${run.setup_tests.app_name_suffix}"
     model_name = "mimir5"
+    endpoint = run.deploy_app.requires.mimir_cluster
   }
 
   # TODO change assertions to something more sensible
   # TODO figure out how to use the http module without an app IP as an output
   assert {
-    condition     = juju_application.mimir_worker.name == "worker-${run.setup_tests.app_name_suffix}"
+    condition     = run.deploy_app.app_name == "worker-${run.setup_tests.app_name_suffix}"
     error_message = "App name mismatch"
   }
 }

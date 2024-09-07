@@ -7,9 +7,9 @@ resource "juju_application" "mimir_worker" {
   charm {
     name    = "mimir-worker-k8s"
     channel = var.channel
+    revision = var.revision
   }
   units  = var.units
   config = var.config
-  # TODO: add revision, if given
 }
 
