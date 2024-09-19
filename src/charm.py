@@ -49,7 +49,7 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self.unit.set_ports(self._mimir_port)
 
         # === EVENT HANDLER REGISTRATION === #
-        self.framework.observe(self.on.loki_pebble_ready, self._on_pebble_ready)  # pyright: ignore
+        self.framework.observe(self.on.mimir_pebble_ready, self._on_pebble_ready)  # pyright: ignore
 
     # === EVENT HANDLERS === #
 
