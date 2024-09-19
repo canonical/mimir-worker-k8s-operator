@@ -14,14 +14,14 @@ https://discourse.charmhub.io/t/4208
 
 import logging
 import re
-
 import socket
+from typing import Optional
+
 from charms.tempo_k8s.v1.charm_tracing import trace_charm
 from cosl.coordinated_workers.worker import CONFIG_FILE, Worker
 from ops.charm import CharmBase
 from ops.main import main
 from ops.pebble import Layer
-from typing import Optional
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
