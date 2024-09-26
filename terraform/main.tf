@@ -5,11 +5,10 @@ resource "juju_application" "mimir_worker" {
   trust = var.trust
 
   charm {
-    name    = "mimir-worker-k8s"
-    channel = var.channel
+    name     = "mimir-worker-k8s"
+    channel  = var.channel
     revision = var.revision
   }
   units  = var.units
   config = var.config
 }
-
