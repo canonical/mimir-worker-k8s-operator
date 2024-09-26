@@ -39,4 +39,9 @@ variable "trust" {
   default     = false
 }
 
-
+# We use constraints to set AntiAffinity in K8s
+# https://discourse.charmhub.io/t/pod-priority-and-affinity-in-juju-charms/4091/13?u=jose
+variable "constraints" {
+  description = "Constraints to be applied"
+  type        = string
+}
