@@ -20,6 +20,7 @@ variable "config" {
 variable "constraints" {
   description = "Constraints to be applied"
   type        = string
+  default     = ""
 }
 
 variable "model_name" {
