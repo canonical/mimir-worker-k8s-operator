@@ -2,7 +2,7 @@ resource "juju_application" "mimir_worker" {
   name = var.app_name
   # Coordinator and worker must be in the same model
   model = var.model_name
-  trust = var.trust
+  trust = true  # We always need this variable to be true in order to be able to apply resources limits. 
 
   charm {
     name     = "mimir-worker-k8s"
