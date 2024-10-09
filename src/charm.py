@@ -17,9 +17,25 @@ import re
 import socket
 from typing import Optional
 
-from charms.tempo_k8s.v1.charm_tracing import trace_charm
-from cosl.coordinated_workers.worker import CONFIG_FILE, Worker
-from ops.charm import CharmBase
+import yaml
+from charms.mimir_coordinator_k8s.v0.mimir_cluster import (
+    MIMIR_CERT_FILE,
+    MIMIR_CLIENT_CA_FILE,
+    MIMIR_CONFIG_FILE,
+    MIMIR_KEY_FILE,
+    ConfigReceivedEvent,
+    MimirClusterRequirer,
+    MimirRole,
+)
+from charms.observability_libs.v0.juju_topology import JujuTopology
+from charms.observability_libs.v1.kubernetes_service_patch import (
+    KubernetesServicePatch,
+)
+from charms.tempo_coordinator_k8s.v0.charm_tracing import trace_charm
+from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
+from lightkube.models.core_v1 import ServicePort
+from ops import pebble
+from ops.charm import CharmBase, CollectStatusEvent
 from ops.main import main
 from ops.pebble import Layer
 
