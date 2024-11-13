@@ -6,7 +6,6 @@ output "endpoints" {
   value = {
     # Requires
     mimir_cluster = "mimir-cluster"
-    
     # Provides
   }
 }
