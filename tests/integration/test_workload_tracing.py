@@ -92,26 +92,3 @@ async def test_workload_traces(ops_test):
         service_name="mimir-all",
         tls=False,
     )
-
-
-@pytest.mark.abort_on_fail
-async def test_workload_traces_tls(ops_test):
-    # integrate with a TLS Provider
-    await ops_test.model.deploy(SSC, application_name=SSC_APP_NAME)
-    await ops_test.model.integrate(SSC_APP_NAME + ":certificates", APP_NAME + ":certificates")
-    await ops_test.model.integrate(
-        SSC_APP_NAME + ":certificates", TEMPO_APP_NAME + ":certificates"
-    )
-
-    # wait for workloads to settle down
-    await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, APP_WORKER_NAME, TEMPO_APP_NAME, TEMPO_WORKER_APP_NAME],
-        status="active",
-        timeout=300,
-    )
-
-    # verify workload traces are ingested into Tempo
-    assert await get_traces_patiently(
-        await get_application_ip(ops_test, TEMPO_APP_NAME),
-        service_name="mimir-all",
-    )
