@@ -1,6 +1,6 @@
 [project]
 name = "mimir-worker-k8s"
-version = "0.1"  # this is in fact irrelevant
+version = "0.0"  # this is in fact irrelevant
 requires-python = ">=3.12"
 
 dependencies = [
