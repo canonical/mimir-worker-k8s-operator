@@ -15,19 +15,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-lint = [
+dev = [
+    # Linting
     "ruff",
     "codespell",
-]
-fmt = ["ruff"]
-static = ["pyright"]
-unit = [
+    # Static
+    "pyright",
+    # Unit
     "pytest",
     "coverage[toml]",
-]
-scenario = []
-integration = [
-    "pytest",
+    # Integration
     "minio",
     "tenacity",
     "juju",
