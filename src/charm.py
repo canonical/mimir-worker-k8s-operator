@@ -50,7 +50,14 @@ class MimirWorkerK8SOperatorCharm(CharmBase):
         self._charm_tracing_endpoint, self._charm_tracing_cert = self.worker.charm_tracing_config()
 
         self._container = self.model.unit.get_container(self._name)
-        self.unit.set_ports(self._mimir_port)
+
+        if worker_ports := self.worker.cluster.get_worker_ports():
+            self.unit.set_ports(*worker_ports)
+        else:
+            # fallback to legacy behaviour
+            logger.warning("cluster hasn't shared `worker_ports` field, "
+                           "you probably should upgrade it to a newer revision")
+            self.unit.set_ports(self._mimir_port)
 
         # === EVENT HANDLER REGISTRATION === #
         self.framework.observe(
