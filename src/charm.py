@@ -27,7 +27,7 @@ from ops.pebble import Layer
 logger = logging.getLogger(__name__)
 
 
-_LEGACY_WORKER_PORTS = 8080
+_LEGACY_WORKER_PORTS = [8080]
 
 
 @trace_charm(
