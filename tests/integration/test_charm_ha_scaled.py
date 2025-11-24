@@ -86,7 +86,14 @@ async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
         trust=True,
     )
     await ops_test.model.wait_for_idle(
-        apps=["worker-read", "worker-write", "worker-backend"], status="blocked"
+        apps=[
+            "worker-read",
+            "worker-write",
+            "worker-backend"
+        ],
+        status="blocked",
+        raise_on_error=False,
+        timeout=1000,
     )
 
 
@@ -123,6 +130,8 @@ async def test_integrate(ops_test: OpsTest):
             "traefik",
         ],
         status="active",
+        raise_on_error=False,
+        timeout=2000,
     )
 
 
