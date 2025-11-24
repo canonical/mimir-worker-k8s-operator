@@ -66,7 +66,7 @@ async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
         "worker-read",
         config={"role-read": True},
         resources=charm_resources(),
-        num_units=3,
+        num_units=1,
         trust=True,
     )
     await ops_test.model.deploy(
@@ -74,7 +74,7 @@ async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
         "worker-write",
         config={"role-write": True},
         resources=charm_resources(),
-        num_units=3,
+        num_units=1,
         trust=True,
     )
     await ops_test.model.deploy(
@@ -82,7 +82,7 @@ async def test_deploy_workers(ops_test: OpsTest, worker_charm: str):
         "worker-backend",
         config={"role-backend": True},
         resources=charm_resources(),
-        num_units=3,
+        num_units=1,
         trust=True,
     )
     await ops_test.model.wait_for_idle(
@@ -132,6 +132,27 @@ async def test_integrate(ops_test: OpsTest):
         status="active",
         raise_on_error=False,
         timeout=2000,
+    )
+
+@pytest.mark.setup
+@pytest.mark.abort_on_fail
+async def test_scale_workers(ops_test: OpsTest):
+    """Scale the Mimir workers."""
+    assert ops_test.model is not None
+    await asyncio.gather(
+        ops_test.model.applications["worker-read"].scale(3),
+        ops_test.model.applications["worker-write"].scale(3),
+        ops_test.model.applications["worker-backend"].scale(3),
+    )
+    await ops_test.model.wait_for_idle(
+        apps=[
+            "worker-read",
+            "worker-write",
+            "worker-backend"
+        ],
+        status="active",
+        raise_on_error=False,
+        timeout=1000,
     )
 
 
